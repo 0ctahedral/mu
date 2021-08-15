@@ -81,8 +81,19 @@ pub const String = struct {
     }
 
     /// Deletes a string literal at an offset in the string
-    pub fn delete(self: *Self, at: usize, data: []const u8) !void {
+    pub fn delete(self: *Self, at: usize, len: usize) !void {
+        // for now we will not shrink the array
+        // maybe we will do this whenever
+        // the size is less than half of the capacity
 
+        // move contents from at+len onward to at
+        memmove(
+            self.buf[(at + len)..],
+            self.buf[at..],
+        );
+
+        self.len -= len;
+        self.size -= len;
     }
 
     // helper functions
@@ -158,4 +169,37 @@ test "add normal string literal" {
     try testing.expect(str.size == 16);
     try testing.expect(str.buf.len == 116);
     try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "ashjkldf01234567"));
+}
+
+test "delete substrings" {
+    var str = try String.init(testing.allocator);
+    defer str.deinit();
+    try testing.expect(str.len == 0);
+    try testing.expect(str.size == 0);
+    try testing.expect(str.buf.len == MINSIZE);
+
+    try str.insert(0,"asdfhjkl1234");
+    try testing.expect(str.len == 12);
+    try testing.expect(str.size == 12);
+    try testing.expect(str.buf.len == 16);
+
+    // delete from front
+    try str.delete(0,4);
+    try testing.expect(str.len == 8);
+    try testing.expect(str.size == 8);
+    try testing.expect(str.buf.len == 16);
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjkl1234"));
+    // delete from back
+    try str.delete(4,4);
+    try testing.expect(str.len == 4);
+    try testing.expect(str.size == 4);
+    try testing.expect(str.buf.len == 16);
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjkl"));
+    // delete from middle
+    // delete from back
+    try str.delete(2,1);
+    try testing.expect(str.len == 3);
+    try testing.expect(str.size == 3);
+    try testing.expect(str.buf.len == 16);
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjl"));
 }
