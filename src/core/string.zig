@@ -100,6 +100,26 @@ pub const String = struct {
         self.size -= len;
     }
 
+    /// creates an owned slice from a string
+    /// allocaters a new slice for returning
+    pub fn toOwned(self: Self) ![]u8 {
+        // get slice of length
+        const slice = self.buf[0..self.size];
+        // allocate new slice
+        var ret = try self.allocator.alloc(u8, self.size);
+        // copy
+        std.mem.copy(u8, ret, slice);
+        // return
+        return ret;
+    }
+
+    /// convert a slice of u8 to a string
+    pub fn fromSlice(c: []u8) Self {
+        // create new string
+        // allocate for length of slice
+        // copy in
+    }
+
     // helper functions
     /// insure that the string can accomodate an addition of n bytes
     fn insure(self: *Self, n: usize) !void {
@@ -217,4 +237,28 @@ test "delete substrings" {
     // deleting too many
     try testing.expectError(StringError.InvalidIndex, str.delete(0, 5));
 }
+
+test "to slice" {
+    var str = try String.init(testing.allocator);
+    defer str.deinit();
+    try str.insert(0,"asdf");
+
+    const b = try str.toOwned();
+    defer testing.allocator.free(b);
+    try testing.expect(std.mem.eql(u8, b, "asdf"));
+}
+
+test "from slice" {
+    const b = try testing.allocator.alloc(u8, 5);
+    defer testing.allocator.free(b);
+    b[0] = 'h';
+    b[1] = 'e';
+    b[2] = 'l';
+    b[3] = 'l';
+    b[4] = 'o';
+    var str = try String.init(testing.allocator);
+    defer str.deinit();
+
+    try str.insert(0, b);
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hello"));
 }
