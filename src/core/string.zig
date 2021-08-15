@@ -82,6 +82,10 @@ pub const String = struct {
 
     /// Deletes a string literal at an offset in the string
     pub fn delete(self: *Self, at: usize, len: usize) !void {
+        // check if the offset and len are valid
+        if (at > self.size or at + len > self.size)
+            return StringError.InvalidIndex;
+
         // for now we will not shrink the array
         // maybe we will do this whenever
         // the size is less than half of the capacity
@@ -169,6 +173,9 @@ test "add normal string literal" {
     try testing.expect(str.size == 16);
     try testing.expect(str.buf.len == 116);
     try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "ashjkldf01234567"));
+
+    // test invalid index
+    try testing.expectError(StringError.InvalidIndex, str.insert(17, "00"));
 }
 
 test "delete substrings" {
@@ -202,4 +209,12 @@ test "delete substrings" {
     try testing.expect(str.size == 3);
     try testing.expect(str.buf.len == 16);
     try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjl"));
+
+
+    // test invalid index
+    // invalid offset
+    try testing.expectError(StringError.InvalidIndex, str.delete(4, 2));
+    // deleting too many
+    try testing.expectError(StringError.InvalidIndex, str.delete(0, 5));
+}
 }
