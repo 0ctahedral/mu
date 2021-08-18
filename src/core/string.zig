@@ -1,7 +1,3 @@
-//! A variable length array of characters
-//! We assume here that most strings will be kinda long
-//! and that we will be adding and removing from them a lot
-//! so there is no point in reallocating every time we make a modification
 
 const std = @import("std");
 const testing = std.testing;
@@ -19,6 +15,9 @@ pub const StringError = error {
 const MINSIZE = 16;
 
 /// A variable length array of characters
+/// We assume here that most strings will be kinda long
+/// and that we will be adding and removing from them a lot
+/// so there is no point in reallocating every time we make a modification
 pub const String = struct {
 
     /// Allocator for managing the buffer
@@ -111,13 +110,6 @@ pub const String = struct {
         std.mem.copy(u8, ret, slice);
         // return
         return ret;
-    }
-
-    /// convert a slice of u8 to a string
-    pub fn fromSlice(c: []u8) Self {
-        // create new string
-        // allocate for length of slice
-        // copy in
     }
 
     // helper functions
