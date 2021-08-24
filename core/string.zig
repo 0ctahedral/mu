@@ -13,6 +13,8 @@ pub const StringError = error {
 
 /// The minimum size of a string
 const MINSIZE = 16;
+/// the maximum empty size of a string
+const MAXSIZE = 256;
 
 /// A variable length array of characters
 /// We assume here that most strings will be kinda long
@@ -79,6 +81,11 @@ pub const String = struct {
         self.len += b.len;
     }
 
+    /// Appends to the end of the string
+    pub inline fn append(self: *Self, b: []const u8) !void {
+        return self.insert(self.size, b);
+    }
+
     /// Deletes a string literal at an offset in the string
     pub fn delete(self: *Self, at: usize, len: usize) !void {
         // check if the offset and len are valid
@@ -110,6 +117,15 @@ pub const String = struct {
         std.mem.copy(u8, ret, slice);
         // return
         return ret;
+    }
+
+    /// clears a string by changing the size
+    /// TODO:
+    /// also shrinks the size of the string if it is larger
+    /// than MAXSIZE
+    pub fn clear(self: *Self) !void {
+        // reset size
+        self.size = 0;
     }
 
     // helper functions
@@ -253,4 +269,24 @@ test "from slice" {
 
     try str.insert(0, b);
     try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hello"));
+}
+
+test "append" {
+    var str = try String.init(testing.allocator);
+    defer str.deinit();
+
+    try str.insert(0, "asdf");
+    try str.append("efg");
+
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "asdfefg"));
+}
+
+test "clear" {
+    var str = try String.init(testing.allocator);
+    defer str.deinit();
+    try str.append("efg");
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "efg"));
+    try str.clear();
+    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], ""));
+    try testing.expect(str.size == 0);
 }
