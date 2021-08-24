@@ -28,6 +28,8 @@ pub fn addTests(builder: *Builder) void {
     // add build command for tui
     const exe = builder.addExecutable("tui", "tui/main.zig");
     exe.setTarget(target);
+    exe.linkLibC();
+    exe.addPackagePath("core", "core/core.zig");
     exe.setBuildMode(mode);
     exe.install();
 
