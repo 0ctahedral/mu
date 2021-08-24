@@ -1,5 +1,4 @@
 const std = @import("std");
-const String = @import("core").String;
 const os = std.os;
 const STDIN = 0;
 const stdout = std.io.getStdOut().writer();
@@ -10,7 +9,6 @@ pub const Term = struct {
     og: os.termios,
     w: u16 = 0,
     h: u16 = 0,
-    cache: String = undefined,
 
     const Self = @This();
     const stdin = std.io.getStdIn();
