@@ -42,13 +42,18 @@ pub const Term = struct {
 
         // update size
         try t.updateSize();
-
         try stdout.print("size: {}x{}\r\n", .{ t.w, t.h });
+
+        // get mouse
+        try stdout.print("\x1b[?1000h", .{});
 
         return t;
     }
 
     pub fn deinit(self: Self) !void {
+        // stop getting mouse
+        try stdout.print("\x1b[?1000l", .{});
+
         try self.clear();
         // restore original settings
         try os.tcsetattr(STDIN, os.TCSA.FLUSH, self.og);
