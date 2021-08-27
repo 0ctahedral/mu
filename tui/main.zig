@@ -59,12 +59,13 @@ pub fn main() anyerror!void {
 
         if (t.readKey()) |b| {
             switch (b) {
-                27 => {
+                // escape key
+                '\x1b' => {
                     // escape sequence
                     // get next byte ']'
-                    _ = t.readKey();
+                    //_ = t.readKey();
                     // get the actual code
-                    try stdout.print("c: {c}\r\n", .{t.readKey().?});
+                    //try stdout.print("c: {c}\r\n", .{t.readKey().?});
                 },
                 else => {
                     if (b < 32) {
