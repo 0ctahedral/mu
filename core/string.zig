@@ -1,9 +1,8 @@
-
 const std = @import("std");
 const testing = std.testing;
 
 /// String errors
-pub const StringError = error {
+pub const StringError = error{
     /// if we cannot reallocate to make this string bigger this is either b/c
     /// of operating system limits or we have reached the string len limit
     OutOfMemory,
@@ -53,7 +52,6 @@ pub const String = struct {
         self.allocator.free(self.buf);
     }
 
-
     /// Insert a string literal at an offset in the string
     pub fn insert(self: *Self, at: usize, b: []const u8) !void {
         // assert that we can append at that point
@@ -67,12 +65,12 @@ pub const String = struct {
         // first move the later part of the string
         memmove(
             self.buf[at..self.size],
-            self.buf[at + b.len..],
+            self.buf[at + b.len ..],
         );
         // then move the contents of b into the buffer
         memmove(
             b[0..],
-            self.buf[at..self.size+b.len],
+            self.buf[at .. self.size + b.len],
         );
 
         // add to length and size
@@ -117,6 +115,10 @@ pub const String = struct {
         std.mem.copy(u8, ret, slice);
         // return
         return ret;
+    }
+
+    pub fn toSlice(self: Self) []u8 {
+        return self.buf[0..self.size];
     }
 
     /// clears a string by changing the size
@@ -185,14 +187,14 @@ test "add normal string literal" {
     // len is 16 because we have not needed to reallocate yet
     try testing.expect(str.buf.len == 16);
     // expect the contents to be the same as the inserted string
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "asdf"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "asdf"));
 
     // now lets add in the middle of the string
     try str.insert(2, "hjkl");
     try testing.expect(str.len == 8);
     try testing.expect(str.size == 8);
     try testing.expect(str.buf.len == MINSIZE);
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "ashjkldf"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "ashjkldf"));
 
     // and do an add that makes it grow the buffer
     // should trigger resize becase we have reached the minsize
@@ -200,7 +202,7 @@ test "add normal string literal" {
     try testing.expect(str.len == 16);
     try testing.expect(str.size == 16);
     try testing.expect(str.buf.len == 116);
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "ashjkldf01234567"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "ashjkldf01234567"));
 
     // test invalid index
     try testing.expectError(StringError.InvalidIndex, str.insert(17, "00"));
@@ -213,31 +215,30 @@ test "delete substrings" {
     try testing.expect(str.size == 0);
     try testing.expect(str.buf.len == MINSIZE);
 
-    try str.insert(0,"asdfhjkl1234");
+    try str.insert(0, "asdfhjkl1234");
     try testing.expect(str.len == 12);
     try testing.expect(str.size == 12);
     try testing.expect(str.buf.len == 16);
 
     // delete from front
-    try str.delete(0,4);
+    try str.delete(0, 4);
     try testing.expect(str.len == 8);
     try testing.expect(str.size == 8);
     try testing.expect(str.buf.len == 16);
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjkl1234"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "hjkl1234"));
     // delete from back
-    try str.delete(4,4);
+    try str.delete(4, 4);
     try testing.expect(str.len == 4);
     try testing.expect(str.size == 4);
     try testing.expect(str.buf.len == 16);
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjkl"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "hjkl"));
     // delete from middle
     // delete from back
-    try str.delete(2,1);
+    try str.delete(2, 1);
     try testing.expect(str.len == 3);
     try testing.expect(str.size == 3);
     try testing.expect(str.buf.len == 16);
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hjl"));
-
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "hjl"));
 
     // test invalid index
     // invalid offset
@@ -249,7 +250,7 @@ test "delete substrings" {
 test "to slice" {
     var str = try String.init(testing.allocator);
     defer str.deinit();
-    try str.insert(0,"asdf");
+    try str.insert(0, "asdf");
 
     const b = try str.toOwned();
     defer testing.allocator.free(b);
@@ -268,7 +269,7 @@ test "from slice" {
     defer str.deinit();
 
     try str.insert(0, b);
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "hello"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "hello"));
 }
 
 test "append" {
@@ -278,15 +279,15 @@ test "append" {
     try str.insert(0, "asdf");
     try str.append("efg");
 
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "asdfefg"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "asdfefg"));
 }
 
 test "clear" {
     var str = try String.init(testing.allocator);
     defer str.deinit();
     try str.append("efg");
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], "efg"));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), "efg"));
     try str.clear();
-    try testing.expect(std.mem.eql(u8, str.buf[0..str.size], ""));
+    try testing.expect(std.mem.eql(u8, str.toSlice(), ""));
     try testing.expect(str.size == 0);
 }
