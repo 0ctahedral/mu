@@ -27,7 +27,7 @@ pub const String = struct {
     /// contents of the string, and capacity
     buf: []u8,
 
-    /// size of the buffer that the string takes up so far
+    /// size of the buffer that the string takes up so far in bytes
     size: usize,
 
     /// length of the string in utf8 codepoints
@@ -128,6 +128,7 @@ pub const String = struct {
     pub fn clear(self: *Self) !void {
         // reset size
         self.size = 0;
+        self.len = 0;
     }
 
     // helper functions
@@ -255,6 +256,7 @@ test "to slice" {
     const b = try str.toOwned();
     defer testing.allocator.free(b);
     try testing.expect(std.mem.eql(u8, b, "asdf"));
+    try testing.expect(std.mem.eql(u8, b, str.toSlice()));
 }
 
 test "from slice" {
