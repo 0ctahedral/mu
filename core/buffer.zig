@@ -1,37 +1,39 @@
 const std = @import("std");
 const String = @import("core.zig").String;
 
-/// Buffers are the contents of a file
-/// A buffer contains blocks of a file and caches
-/// the most recently accessed in a string
+const PAGESIZE = 4096;
+
+/// A buffer is a large collection of characters
+/// this means it could be a mapping to a "real" file on disk
+/// or data only inside a process
 pub const Buffer = struct {
     
-    /// cache of recently accessed block
-    cache: struct {
-        /// string that stores a block in memory
-        data: String,
-
-        /// offset in bytes of the block stored in the cache
-        offset: usize,
-    },
-
     const Self = @This();
+
+    data: String,
 
     /// Creates a buffer
     pub fn init(allocator: *std.mem.Allocator) !Self {
         return Self{
-            .cache=.{
-                .data = try String.init(allocator),
-                .offset = 0,
-            },
+            .data = try String.initSize(allocator, PAGESIZE),
         };
     }
 
     pub fn deinit(self: Self) void {
-        self.cache.data.deinit();
+        self.data.deinit();
     }
+};
 
-    // TODO: blocks
+/// A block represents a section of a buffer
+/// This can be either in memory, in which case,
+/// it contains a pointer
+/// or simply a 
+const Block = struct {
+    /// the start of this block relative to the beginning
+    /// of the buffer
+    offset: usize,
+    /// Size of this block in bytes
+    size: usize
 };
 
 test "init" {

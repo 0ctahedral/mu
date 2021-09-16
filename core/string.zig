@@ -47,6 +47,19 @@ pub const String = struct {
         };
     }
 
+    /// Init with an in initial size
+    pub fn initSize(allocator: *std.mem.Allocator, size: usize) !Self {
+        const s = if (size < MINSIZE) MINSIZE else size;
+        return Self{
+            .allocator = allocator,
+            .buf = allocator.alloc(u8, s) catch |err| {
+                return StringError.OutOfMemory;
+            },
+            .len = 0,
+            .size = 0,
+        };
+    }
+
     /// Deletes a string
     pub fn deinit(self: Self) void {
         self.allocator.free(self.buf);
@@ -292,4 +305,11 @@ test "clear" {
     try str.clear();
     try testing.expect(std.mem.eql(u8, str.toSlice(), ""));
     try testing.expect(str.size == 0);
+}
+
+test "sizedInit" {
+    var str = try String.initSize(testing.allocator, 2048);
+    defer str.deinit();
+
+    try testing.expect(str.buf.len == 2048);
 }

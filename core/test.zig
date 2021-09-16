@@ -2,4 +2,5 @@
 comptime {
     _ = @import("./string.zig");
     _ = @import("./buffer.zig");
+    _ = @import("./tree.zig");
 }
