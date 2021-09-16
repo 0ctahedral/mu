@@ -17,6 +17,17 @@ pub const Leaf = struct {
     data: [M]u8,
     /// number of items in the leaf
     len: u8,
+
+    const Self = @This();
+
+    pub fn init() Node {
+        return Node{
+            .Leaf = .{
+                .data = [_]u8{0} ** M,
+                .len = 0,
+            }
+        };
+    }
 };
 
 /// keeps track of the cumulative sizes
@@ -32,21 +43,24 @@ pub const Inner = struct {
     len: u8,
     /// array of cumulative sizes of all the children
     sizes: ?*sizeTable,
+
+    const Self = @This();
+
+    pub fn init() Node {
+        return Node{
+            .Inner = .{
+                .children = [_]?*Node{null} ** M,
+                .len = 0,
+                .sizes = null,
+            }
+        };
+    }
 };
 
 test "init" {
     try expect(M == 4);
 
-    var l = Node{ .Leaf = .{
-        .data = [_]u8{'a', 'b', 'c', 0},
-        .len = 3
-    }};
+    var l = Leaf.init();
 
-    var st = [_]u8{3, 0, 0, 0};
-
-    var i = Node{ .Inner = .{
-        .children = [_]?*Node{&l, null, null, null},
-        .len = 1,
-        .sizes = &st,
-    }};
+    var i = Inner.init();
 }
