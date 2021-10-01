@@ -1,4 +1,4 @@
 [submodule "zutil"]
 	path = zutil
-	url = git@github-home:0ctahedral/zutil.git
+	url = git@github.com:0ctahedral/zutil.git
 	branch = main
