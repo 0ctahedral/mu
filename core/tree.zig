@@ -15,6 +15,12 @@ const MAX_CHILDREN = 4;
 /// TODO: make this based on a size of node we want
 const MAX_DATA = 4;
 
+/// errors that can be thrown from creating or operating on nodes
+pub const NodeError = error{
+    InvalidSize,
+    ExceedsCapacity,
+};
+
 /// Metadata for a node.
 /// In the future this will be dependent on T and stuff
 /// This data is owned by a node's parent
@@ -30,11 +36,12 @@ const NodeInfo = struct {
 /// The kind of node this is and its contents
 pub const NodeVal = union {
     /// a leaf just contains data
-    Leaf: Leaf,
+    inner: [MAX_CHILDREN]Ref(Node),
     /// an inner node is a slice of pointers
     /// to more metadata which can be either leaves
     /// or more nodes
-    Inner: Inner,
+    //jInner: [MAX_DATA]T align(@alignOf(T)),
+    leaf: [MAX_DATA]T,
 };
 
 /// A node in our tree
@@ -50,27 +57,40 @@ const Node = struct {
 
     const Self = @This();
 
-    /// Creates a node from a leaf
-    pub fn from_leaf(allocator: *Allocator, l: Leaf) !Ref(Self) {
-        //const ptr = try allocator.create(Self);
+    /// Creates a leaf node from a slice of type T
+    pub fn from_slice(allocator: *Allocator, slice: []T) !Ref(Self) {
+        if (slice.len > MAX_DATA) {
+            return NodeError.ExceedsCapacity;
+        }
+
+        var l = NodeVal{.leaf = undefined};
+
+        var i: usize = 0;
+        while (i < slice.len) : (i += 1) {
+            l.leaf[i] = slice[i];
+        }
+
         return Ref(Self).new(allocator, Self{
             // a leaf always has a height of 0
             .height = 0,
-            .len = l.len,
+            .len = slice.len,
             // TODO: create info from leaf type
             .info = .{},
-            .val = .{ .Leaf = l },
+            .val = l,
         });
     }
 
+    /// Creates a node from a slice of node references
     pub fn from_nodes(allocator: *Allocator, nodes: []Ref(Self)) !Ref(Self) {
-        try expect(nodes.len <= MAX_CHILDREN);
+        if (nodes.len > MAX_CHILDREN) {
+            return NodeError.ExceedsCapacity;
+        }
 
-        var in: Inner = .{};
+        var in = NodeVal{.inner = undefined};
 
         var i: usize = 0;
         while (i < nodes.len) : (i += 1) {
-            in.children[i] = nodes[i];
+            in.inner[i] = nodes[i];
         }
 
         return Ref(Self).new(allocator, Self{
@@ -79,41 +99,26 @@ const Node = struct {
             .len = 0,
             // TODO: create info from leaf type
             .info = .{},
-            .val = .{ .Inner = in },
+            .val = in,
         });
     }
 };
 
-/// 
-pub const NodeError = error{
-    InvalidSize,
-    ExceedsCapacity,
-};
-
-/// A leaf contains the actual data of the trie
-pub const Leaf = struct {
-    /// data that the this leaf contains
-    data: [MAX_DATA]T align(@alignOf(T)) = [_]u8{0} ** MAX_DATA,
-    len: usize = 0,
-    const Self = @This();
-};
-
-/// and internal node contains subtrees
-/// or leaves
-pub const Inner = struct {
-    children: [MAX_CHILDREN]Ref(Node) = undefined,
-    const Self = @This();
-};
 
 test "init" {
     const allocator = testing.allocator;
-    const l1: Leaf = .{ .len = 3 };
 
-    const n1 = try Node.from_leaf(allocator, l1);
+    var slice = [_]T{0, 1, 2};
+    const n1 = try Node.from_slice(allocator, &slice);
     defer n1.deinit(allocator);
 
     const in = try Node.from_nodes(allocator, &[_]Ref(Node){ n1, n1, n1 });
     defer in.deinit(allocator);
 
     try expect(n1.ptr().*.len == 3);
+
+    try testing.expectError(
+        error.ExceedsCapacity,
+        Node.from_nodes(allocator, &[_]Ref(Node){ n1, n1, n1, n1, n1 })
+    );
 }
