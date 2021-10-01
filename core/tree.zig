@@ -62,6 +62,26 @@ const Node = struct {
             .val = .{ .Leaf = l },
         });
     }
+
+    pub fn from_nodes(allocator: *Allocator, nodes: []Ref(Self)) !Ref(Self) {
+        try expect(nodes.len <= MAX_CHILDREN);
+
+        var in: Inner = .{};
+
+        var i: usize = 0;
+        while (i < nodes.len) : (i += 1) {
+            in.children[i] = nodes[i];
+        }
+
+        return Ref(Self).new(allocator, Self{
+            // a leaf always has a height of 0
+            .height = 0,
+            .len = 0,
+            // TODO: create info from leaf type
+            .info = .{},
+            .val = .{ .Inner = in },
+        });
+    }
 };
 
 /// 
@@ -74,14 +94,14 @@ pub const NodeError = error{
 pub const Leaf = struct {
     /// data that the this leaf contains
     data: [MAX_DATA]T align(@alignOf(T)) = [_]u8{0} ** MAX_DATA,
-    len: usize,
+    len: usize = 0,
     const Self = @This();
 };
 
 /// and internal node contains subtrees
 /// or leaves
 pub const Inner = struct {
-    children: [MAX_CHILDREN]*Node,
+    children: [MAX_CHILDREN]Ref(Node) = undefined,
     const Self = @This();
 };
 
@@ -89,8 +109,11 @@ test "init" {
     const allocator = testing.allocator;
     const l1: Leaf = .{ .len = 3 };
 
-    var ln = try Node.from_leaf(allocator, l1);
-    defer ln.deinit(allocator);
+    const n1 = try Node.from_leaf(allocator, l1);
+    defer n1.deinit(allocator);
 
-    try expect(ln.rawPtr().*.len == 3);
+    const in = try Node.from_nodes(allocator, &[_]Ref(Node){ n1, n1, n1 });
+    defer in.deinit(allocator);
+
+    try expect(n1.ptr().*.len == 3);
 }
