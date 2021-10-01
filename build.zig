@@ -1,6 +1,7 @@
 const std = @import("std");
 const Builder = std.build.Builder;
 const builtin = @import("builtin");
+const addZutil = @import("zutil/build.zig").addZutil;
 
 pub fn build(builder: *Builder) void {
     const mode = builder.standardReleaseOptions();
@@ -14,11 +15,13 @@ pub fn addTests(builder: *Builder) void {
     // unit tests
     const internal_test_step = builder.addTest("core/test.zig");
     internal_test_step.setBuildMode(mode);
+    addZutil(internal_test_step, "zutil/");
 
     // api integration tests
     const test_step = builder.addTest("test/test.zig");
     test_step.addPackagePath("mu", "core/core.zig");
     test_step.setBuildMode(mode);
+    addZutil(test_step, "zutil/");
 
     // create test step (tests all)
     const test_cmd = builder.step("test", "Test the library");

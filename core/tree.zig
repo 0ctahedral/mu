@@ -1,5 +1,6 @@
 //! Tree for storing stuff
 const std = @import("std");
+const Ref = @import("zutil").containers.Ref;
 const testing = std.testing;
 const expect = testing.expect;
 const Allocator = std.mem.Allocator;
@@ -50,17 +51,16 @@ const Node = struct {
     const Self = @This();
 
     /// Creates a node from a leaf
-    pub fn from_leaf(allocator: *Allocator, l: Leaf) !*Self {
-        const ptr = try allocator.create(Self);
-        ptr.* = Self{
+    pub fn from_leaf(allocator: *Allocator, l: Leaf) !Ref(Self) {
+        //const ptr = try allocator.create(Self);
+        return Ref(Self).new(allocator, Self{
             // a leaf always has a height of 0
             .height = 0,
             .len = l.len,
             // TODO: create info from leaf type
             .info = .{},
             .val = .{ .Leaf = l },
-        };
-        return ptr;
+        });
     }
 };
 
@@ -89,53 +89,8 @@ test "init" {
     const allocator = testing.allocator;
     const l1: Leaf = .{ .len = 3 };
 
-    const ln = try Node.from_leaf(allocator, l1);
-    defer allocator.destroy(ln);
+    var ln = try Node.from_leaf(allocator, l1);
+    defer ln.deinit(allocator);
 
-    try expect(ln.len == 3);
+    try expect(ln.rawPtr().*.len == 3);
 }
-
-//test "init" {
-//    const allocator = testing.allocator;
-//
-//    // this is fine because it is less than 4
-//    var l = try Leaf.create(allocator, 2);
-//    defer allocator.destroy(l);
-//    try expect(l.Leaf.len == 2);
-//
-//    // this should fail because Ml is 32
-//    try testing.expectError(NodeError.InvalidSize, Leaf.create(allocator, 34));
-//
-//    var i = try Inner.create(allocator, 2);
-//    defer allocator.destroy(i);
-//    try expect(i.Inner.len == 2);
-//
-//    // this should fail because Ml is 4
-//    try testing.expectError(NodeError.InvalidSize, Inner.create(allocator, 5));
-//}
-//
-//test "full" {
-//    const allocator = testing.allocator;
-//
-//    var lf = try Leaf.create(allocator, 32);
-//    defer allocator.destroy(lf);
-//    try expect(lf.Leaf.len == 32);
-//    try expect(lf.Leaf.isFull());
-//
-//    var l = try Leaf.create(allocator, 10);
-//    defer allocator.destroy(l);
-//    try expect(!l.Leaf.isFull());
-//}
-//
-//test "push back" {
-//    const allocator = testing.allocator;
-//
-//    var l1 = try Leaf.create(allocator, 1);
-//    defer allocator.destroy(l1);
-//    l1.*.Leaf.data[0] = 1;
-//
-//    var l2 = try l1.Leaf.pushBack(allocator, 3);
-//    defer allocator.destroy(l2);
-//    try expect(l2.*.Leaf.data[0] == l1.*.Leaf.data[0]);
-//    try expect(l2.*.Leaf.data[1] == 3);
-//}
