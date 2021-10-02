@@ -10,10 +10,11 @@ const Count = usize;
 const T = u8;
 /// the maximum number of children an inner node can have
 /// TODO: make this based on a size of node we want
-const MAX_CHILDREN = 4;
+const MIN_CHILDREN = 4;
+const MAX_CHILDREN = 8;
 /// the maximum number of T that can fit in a leaf node
 /// TODO: make this based on a size of node we want
-const MAX_DATA = 4;
+const MAX_DATA = 32;
 
 /// errors that can be thrown from creating or operating on nodes
 pub const NodeError = error{
@@ -31,6 +32,31 @@ const NodeInfo = struct {
     graphemes: usize = 0,
     /// number of line endings in this subtree
     lines: usize = 0,
+
+    const Self = @This();
+
+    /// computes the info about this node
+    pub fn compute(slice: []const T) Self {
+        // TODO: loop over string for graphemes
+        var graphemes: usize = slice.len;
+
+        var lines: usize = 0;
+        for (slice) |c| {
+            if (c == '\n') {
+                lines += 1;
+            }
+        }
+        return .{
+            .lines = lines,
+            .graphemes = graphemes,
+        };
+    }
+
+    /// adds the values of the two node infos together
+    pub fn combine(self: *Self, other: Self) void {
+        self.graphemes += other.graphemes;
+        self.lines += other.lines;
+    }
 };
 
 /// The kind of node this is and its contents
@@ -40,7 +66,6 @@ pub const NodeVal = union {
     /// an inner node is a slice of pointers
     /// to more metadata which can be either leaves
     /// or more nodes
-    //jInner: [MAX_DATA]T align(@alignOf(T)),
     leaf: [MAX_DATA]T,
 };
 
@@ -58,7 +83,7 @@ const Node = struct {
     const Self = @This();
 
     /// Creates a leaf node from a slice of type T
-    pub fn from_slice(allocator: *Allocator, slice: []T) !Ref(Self) {
+    pub fn from_slice(allocator: *Allocator, slice: []const T) !Ref(Self) {
         if (slice.len > MAX_DATA) {
             return NodeError.ExceedsCapacity;
         }
@@ -75,7 +100,7 @@ const Node = struct {
             .height = 0,
             .len = slice.len,
             // TODO: create info from leaf type
-            .info = .{},
+            .info = NodeInfo.compute(slice),
             .val = l,
         });
     }
@@ -89,15 +114,16 @@ const Node = struct {
         var in = NodeVal{.inner = undefined};
 
         var i: usize = 0;
+        var info = NodeInfo{};
         while (i < nodes.len) : (i += 1) {
             in.inner[i] = nodes[i];
+            info.combine(nodes[i].ptr().*.info);
         }
 
         return Ref(Self).new(allocator, Self{
             // a leaf always has a height of 0
-            .height = 0,
-            .len = 0,
-            // TODO: create info from leaf type
+            .height = nodes[0].ptr().*.height + 1,
+            .len = nodes.len,
             .info = .{},
             .val = in,
         });
@@ -129,17 +155,19 @@ pub const Tree = struct {
 test "init" {
     const allocator = testing.allocator;
 
-    var slice = [_]T{0, 1, 2};
-    const n1 = try Node.from_slice(allocator, &slice);
+    var str = "hello\n";
+    const n1 = try Node.from_slice(allocator, str[0..]);
     defer n1.deinit(allocator);
 
     const in = try Node.from_nodes(allocator, &[_]Ref(Node){ n1, n1, n1 });
     defer in.deinit(allocator);
 
-    try expect(n1.ptr().*.len == 3);
+    try expect(n1.ptr().*.len == 6);
+    try expect(n1.ptr().*.info.lines == 1);
+    try expect(n1.ptr().*.info.graphemes == 6);
 
     try testing.expectError(
         error.ExceedsCapacity,
-        Node.from_nodes(allocator, &[_]Ref(Node){ n1, n1, n1, n1, n1 })
+        Node.from_nodes(allocator, &[_]Ref(Node){n1, n1, n1, n1, n1, n1, n1, n1, n1, n1 })
     );
 }
