@@ -14,7 +14,8 @@ const MIN_CHILDREN = 4;
 const MAX_CHILDREN = 8;
 /// the maximum number of T that can fit in a leaf node
 /// TODO: make this based on a size of node we want
-const MAX_DATA = 32;
+const MIN_DATA = 512;
+const MAX_DATA = 1024;
 
 /// errors that can be thrown from creating or operating on nodes
 pub const NodeError = error{
@@ -53,14 +54,16 @@ const NodeInfo = struct {
     }
 
     /// adds the values of the two node infos together
-    pub fn combine(self: *Self, other: Self) void {
-        self.graphemes += other.graphemes;
-        self.lines += other.lines;
+    pub fn combine(self: Self, other: Self) Self {
+        return .{
+            .graphemes = self.graphemes + other.graphemes,
+            .lines = self.lines + other.lines,
+        };
     }
 };
 
 /// The kind of node this is and its contents
-pub const NodeVal = union {
+pub const NodeVal = union(enum) {
     /// a leaf just contains data
     inner: [MAX_CHILDREN]Ref(Node),
     /// an inner node is a slice of pointers
@@ -88,7 +91,7 @@ const Node = struct {
             return NodeError.ExceedsCapacity;
         }
 
-        var l = NodeVal{.leaf = undefined};
+        var l = NodeVal{ .leaf = undefined };
 
         var i: usize = 0;
         while (i < slice.len) : (i += 1) {
@@ -111,22 +114,64 @@ const Node = struct {
             return NodeError.ExceedsCapacity;
         }
 
-        var in = NodeVal{.inner = undefined};
+        var in = NodeVal{ .inner = undefined };
 
         var i: usize = 0;
         var info = NodeInfo{};
         while (i < nodes.len) : (i += 1) {
             in.inner[i] = nodes[i];
-            info.combine(nodes[i].ptr().*.info);
+            info = NodeInfo.combine(info, nodes[i].ptr().info);
         }
 
         return Ref(Self).new(allocator, Self{
             // a leaf always has a height of 0
             .height = nodes[0].ptr().*.height + 1,
             .len = nodes.len,
-            .info = .{},
+            .info = info,
             .val = in,
         });
+    }
+
+    /// Creates a new node from two leaves
+    pub fn merge_leaves(allocator: *Allocator, node1: Ref(Self), node2: Ref(Self)) !Ref(Self) {
+        const n1 = node1.ptr().*;
+        const n2 = node2.ptr().*;
+        const comb_len = n1.len + n2.len;
+
+        // if the two leaves can make a new one then do so
+        if (comb_len < MAX_DATA) {
+            var info = NodeInfo.combine(n1.info, n2.info);
+            var val = NodeVal{.leaf = undefined};
+            var i: usize = 0;
+            while (i < n1.len) : (i += 1) {
+                val.leaf[i] = n1.val.leaf[i];
+            }
+            i = 0;
+            while (i < n2.len) : (i += 1) {
+                val.leaf[n1.len + i] = n2.val.leaf[i];
+            }
+            return Ref(Self).new(allocator, Self{
+                // a leaf always has a height of 0
+                .height = n1.height,
+                .len = comb_len,
+                .info = info,
+                .val = val,
+            });
+        }
+
+        // otherwise, create a new inner node
+        // TODO: should we make this leftwise dense?
+        return Self.from_nodes(allocator, &.{node1, node2});
+    }
+
+    // utility functions
+
+    /// does this node meet the minimum size requirement?
+    fn hasEnoughChildren(self: Self) bool {
+        return switch (self.val) {
+            .leaf => self.len >= MIN_DATA,
+            .inner => self.len >= MIN_CHILDREN,
+        };
     }
 };
 
@@ -151,7 +196,6 @@ pub const Tree = struct {
     // pub fn slice_right(s: []T) Self
 };
 
-
 test "init" {
     const allocator = testing.allocator;
 
@@ -159,15 +203,69 @@ test "init" {
     const n1 = try Node.from_slice(allocator, str[0..]);
     defer n1.deinit(allocator);
 
-    const in = try Node.from_nodes(allocator, &[_]Ref(Node){ n1, n1, n1 });
+    const in = try Node.from_nodes(allocator, &.{ n1, n1, n1 });
     defer in.deinit(allocator);
 
     try expect(n1.ptr().*.len == 6);
     try expect(n1.ptr().*.info.lines == 1);
     try expect(n1.ptr().*.info.graphemes == 6);
 
-    try testing.expectError(
-        error.ExceedsCapacity,
-        Node.from_nodes(allocator, &[_]Ref(Node){n1, n1, n1, n1, n1, n1, n1, n1, n1, n1 })
-    );
+    try testing.expectError(error.ExceedsCapacity, Node.from_nodes(allocator, &.{ n1, n1, n1, n1, n1, n1, n1, n1, n1, n1 }));
+}
+
+test "children" {
+    const allocator = testing.allocator;
+
+    const n1 = try Node.from_slice(allocator, "hello\n");
+    defer n1.deinit(allocator);
+    const n2 = try Node.from_slice(allocator, "ab\n" ** 200);
+    defer n2.deinit(allocator);
+
+    try expect(n1.ptr().hasEnoughChildren() == false);
+    try expect(n2.ptr().hasEnoughChildren() == true);
+    try expect(n2.ptr().info.lines == 200);
+}
+
+test "from_nodes" {
+    const allocator = testing.allocator;
+
+    const n1 = try Node.from_slice(allocator, "hello\n");
+    defer n1.deinit(allocator);
+
+    const in = try Node.from_nodes(allocator, &.{ n1, n1, n1 });
+    defer in.deinit(allocator);
+
+    try expect(in.ptr().len == 3);
+    try expect(in.ptr().info.lines == 3);
+    try expect(in.ptr().info.graphemes == 18);
+}
+
+test "merge leaves" {
+    const allocator = testing.allocator;
+
+    // when both nodes are small enough make a new leaf
+    const n1 = try Node.from_slice(allocator, "hello ");
+    defer n1.deinit(allocator);
+    const n2 = try Node.from_slice(allocator, "world\n");
+    defer n2.deinit(allocator);
+
+    const comb = try Node.merge_leaves(allocator, n1, n2);
+    defer comb.deinit(allocator);
+
+    try expect(comb.ptr().len == 12);
+    try expect(comb.ptr().info.graphemes == 12);
+    try expect(comb.ptr().info.lines == 1);
+    try expect(std.mem.eql(u8, comb.ptr().*.val.leaf[0..12], "hello world\n"));
+
+    // if one is too big then make a node
+    const str = "abc\n" ** 256;
+    const comb_str = str ++ "world\n";
+    const n3 = try Node.from_slice(allocator, str);
+    defer n3.deinit(allocator);
+    const comb2 = try Node.merge_leaves(allocator, n3, n2);
+    defer comb2.deinit(allocator);
+    try expect(comb2.ptr().len == 2);
+    try expect(comb2.ptr().info.graphemes == 1030);
+    try expect(comb2.ptr().info.lines == 257);
+    try expect(comb2.ptr().val == .inner);
 }
