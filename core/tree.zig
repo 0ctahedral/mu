@@ -211,9 +211,13 @@ test "init" {
     try expect(n1.ptr().*.info.graphemes == 6);
 
     try testing.expectError(error.ExceedsCapacity, Node.from_nodes(allocator, &.{ n1, n1, n1, n1, n1, n1, n1, n1, n1, n1 }));
+
+    try expect(in.ptr().len == 3);
+    try expect(in.ptr().info.lines == 3);
+    try expect(in.ptr().info.graphemes == 18);
 }
 
-test "children" {
+test "enough children" {
     const allocator = testing.allocator;
 
     const n1 = try Node.from_slice(allocator, "hello\n");
@@ -224,20 +228,14 @@ test "children" {
     try expect(n1.ptr().hasEnoughChildren() == false);
     try expect(n2.ptr().hasEnoughChildren() == true);
     try expect(n2.ptr().info.lines == 200);
-}
 
-test "from_nodes" {
-    const allocator = testing.allocator;
+    const in1 = try Node.from_nodes(allocator, &.{ n1, n2, n1 });
+    defer in1.deinit(allocator);
+    const in2 = try Node.from_nodes(allocator, &.{ n1, n2, n1 , n2});
+    defer in2.deinit(allocator);
 
-    const n1 = try Node.from_slice(allocator, "hello\n");
-    defer n1.deinit(allocator);
-
-    const in = try Node.from_nodes(allocator, &.{ n1, n1, n1 });
-    defer in.deinit(allocator);
-
-    try expect(in.ptr().len == 3);
-    try expect(in.ptr().info.lines == 3);
-    try expect(in.ptr().info.graphemes == 18);
+    try expect(in1.ptr().hasEnoughChildren() == false);
+    try expect(in2.ptr().hasEnoughChildren() == true);
 }
 
 test "merge leaves" {
