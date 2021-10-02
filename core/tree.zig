@@ -104,6 +104,27 @@ const Node = struct {
     }
 };
 
+pub const Tree = struct {
+    /// the root of this tree
+    root: Ref(Node),
+    /// allocator for adding new nodes and stuff
+    allocator: *Allocator,
+
+    const Self = @This();
+
+    pub fn init(allocator: *Allocator) Self {
+        return .{
+            .allocator = allocator,
+            .root = null,
+        };
+    }
+    // pub fn push_back(self: Self, t: T)
+    // pub fn push_slice(self: Self, s: []T)
+    // pub fn insert(self: Self, s: []T)
+    // pub fn slice_left(self: Self, s: []T) Self
+    // pub fn slice_right(s: []T) Self
+};
+
 
 test "init" {
     const allocator = testing.allocator;
