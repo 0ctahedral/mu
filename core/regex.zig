@@ -13,6 +13,7 @@ const Op = enum {
     Match,
     Jmp,
     Split,
+    Save,
 };
 
 const Instr = union(Op) {
@@ -23,6 +24,7 @@ const Instr = union(Op) {
         lhs: Index,
         rhs: Index,
     },
+    Save: usize,
 };
 
 
@@ -34,16 +36,19 @@ const VM = struct {
     const Thread = struct {
         /// Program counter of the current instruction
         pc: Index = 0,
+        saved: [20]usize,
     };
 
-    thread: Thread = .{},
+    alloc: std.mem.Allocator,
 
     /// Instructions from a compiled 
     instrs: std.ArrayList(Instr),
 
+
     pub fn init(allocator: std.mem.Allocator) !Self {
         return Self{
             .instrs = try std.ArrayList(Instr).initCapacity(allocator, 10),
+            .alloc = allocator,
         };
     }
 
@@ -51,44 +56,92 @@ const VM = struct {
         self.instrs.deinit();
     }
 
-    /// step through a string with the instructions
-    fn step(self: *Self, thread: *Self.thread, char: u8) bool {
-        if (self.instrs.items.len == thread.pc) {
-            return false;
-        }
+    pub fn match(self: Self, str: []const u8) !?[20]usize {
+        // TOOD: add allocator
+        var clist = try std.ArrayList(Thread).initCapacity(self.alloc, 10);
+        defer clist.deinit();
+        var nlist = try std.ArrayList(Thread).initCapacity(self.alloc, 10);
+        defer nlist.deinit();
+        
+        var saved_match: [20]usize = [_]usize{0} ** 20;
 
-        const inst = self.instrs.items[thread.pc];
+        try clist.append(.{
+            .pc = 0,
+            .saved = [_]usize{0} ** 20,
+        });
 
-        switch (inst) {
-            .Char => |match| {
-                std.debug.print("comparing {c} with {c}\n", .{match, char});
-                if (char != match) {
-                    return false;
+        for(str) |c, str_idx| {
+            var i: usize = 0;
+            //if (clist.items.len == 0) {
+            //    return null;
+            //}
+            while (i < clist.items.len) : (i+= 1) {
+                var t = clist.items[i];
+                if (self.instrs.items.len == t.pc) {
+                    return null;
                 }
 
-                thread.pc += 1;
-            },
-            .Match => {
-                std.debug.print("Match\n", .{});
-                return false;
-            },
-            .Jmp => |to| {
-                std.debug.print("Jmp: {}\n", .{to});
-                thread.pc = to;
-            },
-            .Split => |split| {
-                std.debug.print("Split: {} {}\n", .{
-                    split.lhs,
-                    split.rhs,
-                });
+                const inst = self.instrs.items[t.pc];
 
-                thread.pc = split.rhs;
-            },
+                switch (inst) {
+                    .Char => |match| {
+                        if (c != match) {
+                            continue;
+                        }
+                        try nlist.append(.{ .pc = t.pc + 1, .saved = t.saved });
+                    },
+                    .Match => {
+                        std.debug.print("match\n", .{});
+                        saved_match = t.saved;
+                    },
+                    .Jmp => |to| {
+                        std.debug.print("jmp\n", .{});
+                        try clist.append(.{ .pc = to, .saved = t.saved });
+                    },
+                    .Split => |split| {
+                        std.debug.print("split\n", .{});
+                        try clist.append(.{ .pc = split.rhs, .saved = t.saved });
+                        try clist.append(.{ .pc = split.lhs, .saved = t.saved });
+                    },
+                    .Save => |idx| {
+                        t.saved[idx] = str_idx;
+                        std.debug.print("save[{}] {any}\n", .{idx, t.saved});
+                        try nlist.append(.{ .pc = t.pc + 1, .saved = t.saved });
+                    },
+                }
+            }
+
+            // swap lists
+            var tmp = clist;
+            clist = nlist;
+            nlist = tmp;
+            nlist.clearRetainingCapacity();
         }
 
-        return true;
+        return saved_match;
     }
 };
+
+// e1e2	    codes for e1 codes for e2
+//
+// e1|e2    split L1, L2
+//          L1: codes for e1
+//             jmp L3
+//          L2: codes for e2
+//          L3:
+// 
+// e?	    split L1, L2
+//          L1: codes for e
+//          L2:
+// 
+// e*	    L1: split L2, L3
+//          L2: codes for e
+//              jmp L1
+//          L3:
+// 
+// e+	    L1: codes for e
+//          split L1, L3
+//          L3:
 
 test "init" {
     var vm = try VM.init(testing.allocator);
@@ -98,15 +151,15 @@ test "init" {
 test "a+b+" {
     var vm = try VM.init(testing.allocator);
     try vm.instrs.insertSlice(0, &[_]Instr{
+        .{ .Save = 0 },
         .{ .Char = 'a' },
-        .{ .Split = .{ .lhs = 0, .rhs = 2 } },
+        .{ .Split = .{ .lhs = 1, .rhs = 3 } },
         .{ .Char = 'b' },
-        .{ .Split = .{ .lhs = 2, .rhs = 4 } },
+        .{ .Split = .{ .lhs = 3, .rhs = 5 } },
+        .{ .Save = 1 },
         .{ .Match = .{} },
     });
     defer vm.deinit();
-
-    var str: []const u8 = "aaabb";
 
     //
     //
@@ -116,64 +169,25 @@ test "a+b+" {
     //
     //
 
-    var l1 = try std.ArrayList(VM.Thread).initCapacity(testing.allocator, 10);
-    defer l1.deinit();
-    var l2 = try std.ArrayList(VM.Thread).initCapacity(testing.allocator, 10);
-    defer l2.deinit();
+    //std.debug.print("mwith axaabb: {any}\n", .{try vm.match("axaabb")});
+    //std.debug.print("mwith aabb: {any}\n", .{try vm.match("aabb")});
 
-    var clist = &l1;
-    var nlist = &l2;
+    //try testing.expect((try vm.match("axaabb")) == null);
+    //try testing.expect((try vm.match("aaabb")).?[1] == @as(usize, 4));
+}
 
-    try clist.append(.{ .pc = 0 });
+test "a*" {
+    var vm = try VM.init(testing.allocator);
+    try vm.instrs.insertSlice(0, &[_]Instr{
+        .{ .Save = 0 },
+        .{ .Split = .{ .lhs = 2, .rhs = 4 } },
+        .{ .Char = 'a' },
+        .{ .Jmp = 0 },
+        .{ .Save = 1 },
+        .{ .Match = .{} },
+    });
+    defer vm.deinit();
 
-    for(str) |c| 
-    {
-        var i: usize = 0;
-        while (i < clist.items.len) : (i+= 1) {
-            const t = clist.items[i];
-            if (vm.instrs.items.len == t.pc) {
-                std.debug.print("out of instructions\n", .{});
-                continue;
-            }
-
-            const inst = vm.instrs.items[t.pc];
-
-            std.debug.print("inst: {}\n", .{t.pc});
-
-            switch (inst) {
-                .Char => |match| {
-                    std.debug.print("t[{}] comparing {c} with {c}\n", .{i, match, c});
-                    if (c != match) {
-                        std.debug.print("t[{}] failed to match\n", .{i});
-                        continue;
-                    }
-
-                    try nlist.append(.{ .pc = t.pc + 1 });
-                },
-                .Match => {
-                    std.debug.print("t[{}] Match\n", .{i});
-                    break;
-                },
-                .Jmp => |to| {
-                    std.debug.print("t[{}] Jmp: {}\n", .{i, to});
-                    try clist.append(.{ .pc = to });
-                },
-                .Split => |split| {
-                    std.debug.print("t[{}] Split: {} {}\n", .{ i, 
-                        split.lhs,
-                        split.rhs,
-                    });
-                    try clist.append(.{ .pc = split.rhs });
-                    try clist.append(.{ .pc = split.lhs });
-                },
-            }
-        }
-
-        std.debug.print("swapping...\n", .{});
-
-        // swap lists
-        var tmp = clist;
-        clist = nlist;
-        nlist = tmp;
-    }
+    //try testing.expect((try vm.match("aaaa")).?[1] == @as(usize, 3));
+    try testing.expect((try vm.match("aaab")).?[1] == @as(usize, 1));
 }

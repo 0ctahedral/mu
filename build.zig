@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const addZutil = @import("zutil/build.zig").addZutil;
 
 pub fn build(builder: *Builder) void {
-    const mode = builder.standardReleaseOptions();
+    //const mode = builder.standardReleaseOptions();
     addTests(builder);
 }
 
